@@ -128,6 +128,7 @@ namespace ACE.Entity.Enum
         AddContract                   = 119,
         RemoveContract                = 120,
         InqContractsFull              = 121,
+        AwardEnlightenedXp            = 122,
 
         // Unknown Id Emotes & Custom Emotes
         Enlightenment                 = 9001

@@ -183,6 +183,39 @@ namespace ACE.Server.WorldObjects.Managers
                     }
                     break;
 
+                case EmoteType.AwardEnlightenedXp:
+                    {
+                        if (player != null)
+                        {
+                            var amt = emote.Amount64 ?? emote.Amount ?? 0;
+
+                            if (amt > 0)
+                            {
+                                // Use Quest XP so it doesn't trigger allegiance passup;
+                                // isArena:true bypasses the Enlightenment XP restriction.
+                                player.GrantXP(amt, XpType.Quest, ShareType.All, isArena: true);
+
+                                // Optional: feedback to player/log
+                                player.Session?.Network?.EnqueueSend(
+                                    new GameMessageSystemChat($"You have been granted {amt:N0} XP.", ChatMessageType.Broadcast));
+
+                                //log.Info($"[AwardEnlightenedXp] NPC {WorldObject?.Name ?? "Unknown"} granted {amt} XP to {player.Name} (Enl={player.Enlightenment}).");
+                            }
+                            else if (amt < 0)
+                            {
+                                // Negative = remove XP (unchanged behavior)
+                                player.SpendXP(-amt);
+
+                                player.Session?.Network?.EnqueueSend(
+                                    new GameMessageSystemChat($"{-amt:N0} XP has been removed.", ChatMessageType.Broadcast));
+
+                                //log.Info($"[AwardEnlightenedXp] NPC {WorldObject?.Name ?? "Unknown"} removed {-amt} XP from {player.Name} (Enl={player.Enlightenment}).");
+                            }
+                            // amt == 0: do nothing
+                        }
+                        break;
+                    }
+
                 case EmoteType.BLog:
 
                     text = Replace(emote.Message, WorldObject, targetObject, emoteSet.Quest);
