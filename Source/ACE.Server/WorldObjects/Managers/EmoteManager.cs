@@ -910,101 +910,148 @@ namespace ACE.Server.WorldObjects.Managers
 
                 /* plays an animation on the source object */
                 case EmoteType.Motion:
-
-                    var debugMotion = false;
-
-                    if (Debug)
-                        Console.Write($".{(MotionCommand)emote.Motion}");
-
-                    // If the landblock is dormant, there are no players in range
-                    if (WorldObject.CurrentLandblock?.IsDormant ?? false)
-                        break;
-
-                    // are there players within emote range?
-                    if (!WorldObject.PlayersInRange(ClientMaxAnimRange))
-                        break;
-
-                    if (WorldObject.PhysicsObj != null && WorldObject.PhysicsObj.IsMovingTo())
-                        break;
-
-                    if (WorldObject == null || WorldObject.CurrentMotionState == null) break;
-
-                    // TODO: REFACTOR ME
-                    if (emoteSet.Category != EmoteCategory.Vendor && emoteSet.Style != null)
                     {
-                        var startingMotion = new Motion((MotionStance)emoteSet.Style, (MotionCommand)emoteSet.Substyle);
-                        motion = new Motion((MotionStance)emoteSet.Style, (MotionCommand)emote.Motion, emote.Extent);
+                        var debugMotion = false;
 
-                        if (WorldObject.CurrentMotionState.Stance != startingMotion.Stance)
+                        // --- safe debug print (no nullable cast) ---
+                        if (Debug)
                         {
-                            if (WorldObject.CurrentMotionState.Stance == MotionStance.Invalid)
-                            {
-                                if (debugMotion)
-                                    Console.WriteLine($"{WorldObject.Name} running starting motion {(MotionStance)emoteSet.Style}, {(MotionCommand)emoteSet.Substyle}");
+                            var dbg = emote.Motion.HasValue
+                                ? ((MotionCommand)emote.Motion.Value).ToString()
+                                : "null";
+                            Console.Write($".{dbg}");
+                        }
 
-                                delay = WorldObject.ExecuteMotion(startingMotion);
+                        // If the landblock is dormant, there are no players in range
+                        if (WorldObject?.CurrentLandblock?.IsDormant ?? false) break;
+
+                        // are there players within emote range?
+                        if (!WorldObject.PlayersInRange(ClientMaxAnimRange)) break;
+
+                        if (WorldObject.PhysicsObj != null && WorldObject.PhysicsObj.IsMovingTo()) break;
+
+                        if (WorldObject?.CurrentMotionState == null) break;
+
+                        // Pull nullable enums safely
+                        bool hasStyle = emoteSet.Style.HasValue;
+                        bool hasSubstyle = emoteSet.Substyle.HasValue;
+                        bool hasMotion = emote.Motion.HasValue;
+
+                        if (emoteSet.Category != EmoteCategory.Vendor && hasStyle && hasSubstyle && hasMotion)
+                        {
+                            var style = (MotionStance)emoteSet.Style.Value;
+                            var substyle = (MotionCommand)emoteSet.Substyle.Value;
+                            var motionCmd = (MotionCommand)emote.Motion.Value;
+
+                            var startingMotion = new Motion(style, substyle);
+                            motion = new Motion(style, motionCmd, emote.Extent);
+
+                            if (WorldObject.CurrentMotionState.Stance != startingMotion.Stance)
+                            {
+                                if (WorldObject.CurrentMotionState.Stance == MotionStance.Invalid)
+                                {
+                                    if (debugMotion)
+                                        Console.WriteLine($"{WorldObject.Name} running starting motion {style}, {substyle}");
+
+                                    delay = WorldObject.ExecuteMotion(startingMotion);
+                                }
+                            }
+                            else
+                            {
+                                if (WorldObject.CurrentMotionState.MotionState.ForwardCommand == startingMotion.MotionState.ForwardCommand
+                                    && startingMotion.Stance == MotionStance.NonCombat)     // enforce non-combat here?
+                                {
+                                    if (debugMotion)
+                                        Console.WriteLine($"{WorldObject.Name} running motion {style}, {motionCmd}");
+
+                                    float? maxRange = ClientMaxAnimRange;
+                                    if (MotionQueue.Contains(motionCmd))
+                                        maxRange = null;
+
+                                    var motionTable = DatManager.PortalDat.ReadFromDat<DatLoader.FileTypes.MotionTable>(WorldObject.MotionTableId);
+                                    var animLength = motionTable?.GetAnimationLength(
+                                        WorldObject.CurrentMotionState.Stance, motionCmd, MotionCommand.Ready) ?? 0f;
+
+                                    delay = WorldObject.ExecuteMotion(motion, true, maxRange);
+
+                                    var motionChain = new ActionChain();
+                                    motionChain.AddDelaySeconds(animLength);
+                                    motionChain.AddAction(WorldObject, () =>
+                                    {
+                                        // FIXME: better cycle handling
+                                        var cmd = WorldObject.CurrentMotionState.MotionState.ForwardCommand;
+                                        if (cmd != MotionCommand.Dead && cmd != MotionCommand.Sleeping && cmd != MotionCommand.Sitting && !cmd.ToString().EndsWith("State"))
+                                        {
+                                            if (debugMotion)
+                                                Console.WriteLine($"{WorldObject.Name} running starting motion again {style}, {substyle}");
+
+                                            WorldObject.ExecuteMotion(startingMotion);
+                                        }
+                                    });
+                                    motionChain.EnqueueChain();
+
+                                    if (debugMotion)
+                                        Console.WriteLine($"{WorldObject.Name} appending time to existing chain: " + animLength);
+                                }
                             }
                         }
                         else
                         {
-                            if (WorldObject.CurrentMotionState.MotionState.ForwardCommand == startingMotion.MotionState.ForwardCommand
-                                    && startingMotion.Stance == MotionStance.NonCombat)     // enforce non-combat here?
+                            // vendor / other motions OR missing style/substyle -> fallback path
+                            if (!hasMotion)
                             {
-                                if (debugMotion)
-                                    Console.WriteLine($"{WorldObject.Name} running motion {(MotionStance)emoteSet.Style}, {(MotionCommand)emote.Motion}");
+                                // build safe strings without dereferencing nullables
+                                var styleStr =
+                                    emoteSet.Style.HasValue
+                                        ? ((MotionStance)emoteSet.Style.Value).ToString()
+                                        : "null";
+                                var substyleStr =
+                                    emoteSet.Substyle.HasValue
+                                        ? ((MotionCommand)emoteSet.Substyle.Value).ToString()
+                                        : "null";
 
-                                float? maxRange = ClientMaxAnimRange;
-                                if (MotionQueue.Contains((MotionCommand)emote.Motion))
-                                    maxRange = null;
+                                // identify the NPC clearly
+                                var npcName = WorldObject?.Name ?? "unknown";
+                                var npcGuid = WorldObject?.Guid.ToString() ?? "null";
+                                var motionTableId = WorldObject?.MotionTableId.ToString() ?? "null";
+                                var lb = WorldObject?.CurrentLandblock?.CellLandblock;
 
-                                var motionTable = DatManager.PortalDat.ReadFromDat<DatLoader.FileTypes.MotionTable>(WorldObject.MotionTableId);
-                                var animLength = motionTable.GetAnimationLength(WorldObject.CurrentMotionState.Stance, (MotionCommand)emote.Motion, MotionCommand.Ready);
-
-                                delay = WorldObject.ExecuteMotion(motion, true, maxRange);
-
-                                var motionChain = new ActionChain();
-                                motionChain.AddDelaySeconds(animLength);
-                                motionChain.AddAction(WorldObject, () =>
-                                {
-                                    // FIXME: better cycle handling
-                                    var cmd = WorldObject.CurrentMotionState.MotionState.ForwardCommand;
-                                    if (cmd != MotionCommand.Dead && cmd != MotionCommand.Sleeping && cmd != MotionCommand.Sitting && !cmd.ToString().EndsWith("State"))
-                                    {
-                                        if (debugMotion)
-                                            Console.WriteLine($"{WorldObject.Name} running starting motion again {(MotionStance)emoteSet.Style}, {(MotionCommand)emoteSet.Substyle}");
-
-                                        WorldObject.ExecuteMotion(startingMotion);
-                                    }
-                                });
-                                motionChain.EnqueueChain();
-
-                                if (debugMotion)
-                                    Console.WriteLine($"{WorldObject.Name} appending time to existing chain: " + animLength);
+                                Console.WriteLine(
+                                    $"ExecuteEmote.Motion: missing Motion value. " +
+                                    $"NPC='{npcName}' guid={npcGuid} motionTableId={motionTableId} " +
+                                    $"category={emoteSet.Category} style={styleStr} substyle={substyleStr}. Skipping." +
+                                    $"landblock={lb}"
+                                );
+                                break;
                             }
+
+                            var motionCmd = (MotionCommand)emote.Motion.Value;
+                            var startingMotion = new Motion(MotionStance.NonCombat, MotionCommand.Ready);
+
+                            var motionTable = DatManager.PortalDat.ReadFromDat<DatLoader.FileTypes.MotionTable>(WorldObject.MotionTableId);
+                            var animLength = motionTable?.GetAnimationLength(
+                                WorldObject.CurrentMotionState.Stance, motionCmd, MotionCommand.Ready) ?? 0f;
+
+                            // Use current stance if valid; otherwise fall back to NonCombat
+                            var stance = WorldObject.CurrentMotionState.Stance == MotionStance.Invalid
+                                ? MotionStance.NonCombat
+                                : WorldObject.CurrentMotionState.Stance;
+
+                            motion = new Motion(stance, motionCmd, emote.Extent);
+
+                            if (debugMotion)
+                                Console.WriteLine($"{WorldObject.Name} running motion (fallback) {stance}, {motionCmd}");
+
+                            delay = WorldObject.ExecuteMotion(motion);
+
+                            var motionChain = new ActionChain();
+                            motionChain.AddDelaySeconds(animLength);
+                            motionChain.AddAction(WorldObject, () => WorldObject.ExecuteMotion(startingMotion, false));
+                            motionChain.EnqueueChain();
                         }
+
+                        break;
                     }
-                    else
-                    {
-                        // vendor / other motions
-                        var startingMotion = new Motion(MotionStance.NonCombat, MotionCommand.Ready);
-                        var motionTable = DatManager.PortalDat.ReadFromDat<DatLoader.FileTypes.MotionTable>(WorldObject.MotionTableId);
-                        var animLength = motionTable.GetAnimationLength(WorldObject.CurrentMotionState.Stance, (MotionCommand)emote.Motion, MotionCommand.Ready);
-
-                        motion = new Motion(MotionStance.NonCombat, (MotionCommand)emote.Motion, emote.Extent);
-
-                        if (debugMotion)
-                            Console.WriteLine($"{WorldObject.Name} running motion (block 2) {MotionStance.NonCombat}, {(MotionCommand)(emote.Motion ?? 0)}");
-
-                        delay = WorldObject.ExecuteMotion(motion);
-
-                        var motionChain = new ActionChain();
-                        motionChain.AddDelaySeconds(animLength);
-                        motionChain.AddAction(WorldObject, () => WorldObject.ExecuteMotion(startingMotion, false));
-
-                        motionChain.EnqueueChain();
-                    }
-
-                    break;
 
                 /* move to position relative to home */
                 case EmoteType.Move:
