@@ -207,28 +207,38 @@ namespace ACE.Server.WorldObjects
         // lowest value found in data / for starter bows
         public const float DefaultProjectileSpeed = 20.0f;
 
-        public float GetProjectileSpeed()
+        public float GetProjectileSpeed(WorldObject target = null)
         {
             var missileLauncher = GetEquippedMissileWeapon();
-
             var maxVelocity = missileLauncher?.MaximumVelocity ?? DefaultProjectileSpeed;
 
             if (maxVelocity == 0.0f)
             {
-                log.Warn($"{Name}.GetMissileSpeed() - {missileLauncher.Name} ({missileLauncher.Guid}) has speed 0");
-
+                log.Warn($"{Name}.GetProjectileSpeed() - {missileLauncher?.Name} ({missileLauncher?.Guid}) has speed 0");
                 maxVelocity = DefaultProjectileSpeed;
             }
 
+            // Fast missiles toggle
             if (this is Player player && player.GetCharacterOption(CharacterOption.UseFastMissiles))
             {
                 maxVelocity *= PropertyManager.GetDouble("fast_missile_modifier").Item;
             }
 
-            // hard cap in physics engine
-            maxVelocity = Math.Min(maxVelocity, PhysicsGlobals.MaxVelocity);
+            // ✅ PvP modifier
+            if (target is Player)
+            {
+                var pvpMult = PropertyManager.GetDouble("pvp_arrow_speed_modifier").Item;
+                maxVelocity *= pvpMult;
 
-            //Console.WriteLine($"MaxVelocity: {maxVelocity}");
+                // 🔎 Log only if multiplier is not default
+                if (Math.Abs(pvpMult - 1.0f) > 0.01f)
+                {
+                    Console.WriteLine($"[PvP] Adjusted projectile speed to {maxVelocity:F2} for {Name} shooting at {target.Name} (multiplier {pvpMult})");
+                }
+            }
+
+            // Cap it
+            maxVelocity = Math.Min(maxVelocity, PhysicsGlobals.MaxVelocity);
 
             return (float)maxVelocity;
         }

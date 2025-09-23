@@ -199,7 +199,7 @@ namespace ACE.Server.WorldObjects
                 Session.Network.EnqueueSend(new GameEventCombatCommenceAttack(Session));
             }
 
-            var projectileSpeed = GetProjectileSpeed();
+            var projectileSpeed = GetProjectileSpeed(target);
 
             // get z-angle for aim motion
             var aimVelocity = GetAimVelocity(target, projectileSpeed);
