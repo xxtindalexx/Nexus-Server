@@ -101,6 +101,8 @@ namespace ACE.Server.WorldObjects
             proj.Location.Pos = origin;
             proj.Location.Rotation = orientation;
 
+            proj.CustomData["LaunchTime"] = DateTime.UtcNow; // ✅ Log launch time
+
             SetProjectilePhysicsState(proj, target, velocity);
 
             var success = LandblockManager.AddObject(proj);

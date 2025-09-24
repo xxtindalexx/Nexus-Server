@@ -59,6 +59,8 @@ namespace ACE.Server.WorldObjects
 
         public PhysicsObj PhysicsObj { get; protected set; }
 
+        public Dictionary<string, object> CustomData { get; } = new Dictionary<string, object>();
+
         public ObjectDescriptionFlag ObjectDescriptionFlags { get; protected set; }
 
         public SequenceManager Sequences { get; } = new SequenceManager();

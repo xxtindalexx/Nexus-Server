@@ -3,6 +3,7 @@ using System.Numerics;
 
 using ACE.Entity.Enum;
 using ACE.Server.Entity.Actions;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.Physics.Animation;
@@ -224,7 +225,16 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
-            var launchTime = EnqueueMotionPersist(actionChain, aimLevel);
+            var animSpeed = GetAnimSpeed();
+
+            // ✅ Check for PvP and apply multiplier
+            if (target is Player && PropertyManager.GetDouble("pvp_missile_anim_speed_multiplier").Item != 1.0)
+            {
+                var speedMult = PropertyManager.GetDouble("pvp_missile_anim_speed_multiplier").Item;
+                animSpeed *= (float)speedMult;
+            }
+
+            var launchTime = EnqueueMotionPersist(actionChain, aimLevel, animSpeed);
 
             // launch projectile
             actionChain.AddAction(this, () =>
@@ -261,12 +271,11 @@ namespace ACE.Server.WorldObjects
             }
 
             // reload animation
-            var animSpeed = GetAnimSpeed();
             var reloadTime = EnqueueMotionPersist(actionChain, stance, MotionCommand.Reload, animSpeed);
 
             // reset for next projectile
             EnqueueMotionPersist(actionChain, stance, MotionCommand.Ready);
-            var linkTime = MotionTable.GetAnimationLength(MotionTableId, stance, MotionCommand.Reload, MotionCommand.Ready);
+            var linkTime = MotionTable.GetAnimationLength(MotionTableId, stance, MotionCommand.Reload, MotionCommand.Ready, 1.0f, this, target);
             //var cycleTime = MotionTable.GetCycleLength(MotionTableId, CurrentMotionState.Stance, MotionCommand.Ready);
 
             actionChain.AddAction(this, () =>

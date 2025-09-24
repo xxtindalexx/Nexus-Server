@@ -794,7 +794,8 @@ namespace ACE.Server.Managers
                 ("arena_1v1_healkit_skill_bonus_cap", new Property<double>(150, "the maximum effective skill bonus applied from a healing kit during arena 1v1 events.")),
                 ("arena_1v1_healkit_restoration_bonus_cap", new Property<double>(1.5, "the maximum effective restoration bonus applied from a healing kit during arena 1v1 events.")),
                 ("cast_delay_increment", new Property<double>(0.005, "the delay amount to increment every broadcast until a successful roll delays a broadcast")),
-                ("pvp_arrow_speed_modifier", new Property<double>(1, "Multiplier applied to missile speed when shooting at another player."))
+                ("pvp_arrow_speed_modifier", new Property<double>(1, "Multiplier applied to missile speed when shooting at another player.")),
+                ("pvp_missile_anim_speed_multiplier", new Property<double>(1, "Multiplier for PvP missile firing animation speed."))
                 );
 
         public static readonly ReadOnlyDictionary<string, Property<string>> DefaultStringProperties =

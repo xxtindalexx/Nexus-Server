@@ -5,6 +5,7 @@ using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
 using ACE.Server.Network.GameMessages.Messages;
+using log4net;
 
 namespace ACE.Server.WorldObjects
 {
@@ -17,6 +18,23 @@ namespace ACE.Server.WorldObjects
         public static void OnCollideObject(WorldObject worldObject, WorldObject target)
         {
             if (!worldObject.PhysicsObj.is_active()) return;
+
+            // Log arrow flight time (PvP only)
+            if (worldObject.CustomData.TryGetValue("LaunchTime", out var launchObj) && launchObj is DateTime launchTime)
+            {
+                var flightTime = DateTime.UtcNow - launchTime;
+
+                if (worldObject.ProjectileSource is Player shooter && target is Player victim)
+                {
+                    var velocity = worldObject.PhysicsObj?.Velocity;
+                    var speed = velocity?.Length() ?? 0;
+
+                    Console.WriteLine($"[PvP Arrow] {shooter.Name} → {victim.Name} | Flight Time: {flightTime.TotalMilliseconds:F0} ms | Final Speed: {speed:F2} m/s");
+                }
+
+                // optional: clean up to free memory
+                worldObject.CustomData.Remove("LaunchTime");
+            }
 
             //Console.WriteLine($"Projectile.OnCollideObject - {WorldObject.Name} ({WorldObject.Guid}) -> {target.Name} ({target.Guid})");
 
