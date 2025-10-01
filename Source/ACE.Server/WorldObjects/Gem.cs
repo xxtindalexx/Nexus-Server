@@ -143,6 +143,14 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            //Twisted's attuned and bonded enlightenment item
+            if (WeenieClassId == 49007057)
+            {
+                player.EarnXP(1000000000, XpType.Kill, ShareType.None, false);
+                player.TryConsumeFromInventoryWithNetworking(this, 1);
+                return;
+            }
+
             //Custom XP Bottle
             else if (WeenieClassId == 490071)
             {
